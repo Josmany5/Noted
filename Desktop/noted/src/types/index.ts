@@ -39,6 +39,25 @@ export enum TemplateRecurrence {
   MONTHLY = 'monthly',
 }
 
+export enum NoteFormat {
+  NOTE = 'note',         // 📝 Regular note
+  TASK = 'task',         // ✅ Task with checkboxes
+  PROJECT = 'project',   // 🚀 Project (future: timeline/milestones)
+  GOAL = 'goal',         // 👑 Goal (future: progress tracker)
+  JOURNAL = 'journal',   // 📔 Journal (future: date-based)
+  LIBRARY = 'library',   // 📚 Library (future: reading list)
+}
+
+// Format emoji mapping
+export const FORMAT_EMOJIS: Record<NoteFormat, string> = {
+  [NoteFormat.NOTE]: '📝',
+  [NoteFormat.TASK]: '✅',
+  [NoteFormat.PROJECT]: '🚀',
+  [NoteFormat.GOAL]: '👑',
+  [NoteFormat.JOURNAL]: '📔',
+  [NoteFormat.LIBRARY]: '📚',
+};
+
 // ============================================
 // Core Data Models
 // ============================================
@@ -48,6 +67,9 @@ export interface Note {
   title: string;
   createdAt: Date;
   lastModified: Date;
+
+  // Format
+  noteFormat: NoteFormat; // Determines how note is displayed/behaves
 
   // Organization
   folderId?: string;
@@ -74,8 +96,12 @@ export interface Note {
 
 export interface Entry {
   id: string;
-  timestamp: Date;
+  timestamp: Date; // When created
   content: string; // Rich text (could be markdown or HTML)
+
+  // Format - NEW: Entry-level formatting
+  entryFormats: NoteFormat[]; // Can have multiple formats (e.g., [NOTE, TASK, GOAL])
+  formatData?: EntryFormatData; // Data for each format type
 
   // Context
   location?: Location;
@@ -85,11 +111,37 @@ export interface Entry {
 
   // Edit tracking
   isEdited: boolean;
-  editHistory: EditVersion[];
+  editedAt?: Date; // When last edited (simple timestamp)
+  editHistory: EditVersion[]; // Full history (Phase 2)
 
   // Embedded content
   embeddedLinks: SavedLink[];
   imageUrls: string[];
+}
+
+// Data structure for each format type within an entry
+export interface EntryFormatData {
+  tasks?: Task[]; // For TASK format
+  projectMilestones?: ProjectMilestone[]; // For PROJECT format
+  goalProgress?: GoalData; // For GOAL format
+  journalMood?: Mood; // For JOURNAL format
+  libraryLinks?: SavedLink[]; // For LIBRARY format
+}
+
+// New types for format-specific data
+export interface ProjectMilestone {
+  id: string;
+  description: string;
+  isCompleted: boolean;
+  completedAt?: Date;
+  dueDate?: Date;
+}
+
+export interface GoalData {
+  description: string;
+  progress: number; // 0-100
+  target?: string;
+  deadline?: Date;
 }
 
 export interface EditVersion {
@@ -170,11 +222,47 @@ export interface Location {
   isUserNamed: boolean; // vs auto-detected
 }
 
+export interface TaskStep {
+  id: string;
+  description: string;
+  isCompleted: boolean;
+  completedAt?: Date;
+  createdAt: Date;
+}
+
 export interface Task {
   id: string;
   description: string;
   isCompleted: boolean;
   completedAt?: Date;
+  createdAt: Date;
+
+  // Steps (sub-tasks)
+  steps: TaskStep[];
+}
+
+export interface StandaloneTask {
+  id: string;
+  description: string;
+  isCompleted: boolean;
+  completedAt?: Date;
+  createdAt: Date;
+  lastEditedAt?: Date;
+
+  // Priority (like notes)
+  urgency: UrgencyLevel;
+  importance: number; // 0-5 stars
+
+  // Organization
+  hashtags: string[];
+
+  // Due date & reminders
+  dueDate?: Date;
+  reminderTime?: Date;
+  notificationEnabled: boolean;
+
+  // Steps (sub-tasks)
+  steps: TaskStep[];
 }
 
 export interface DeepWorkSession {

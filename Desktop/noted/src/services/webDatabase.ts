@@ -7,11 +7,14 @@ import type {
   Note,
   Entry,
   Folder,
+  StandaloneTask,
 } from '../types';
+import { UrgencyLevel, NoteFormat } from '../types';
 
 const STORAGE_KEYS = {
   NOTES: 'noted_notes',
   FOLDERS: 'noted_folders',
+  STANDALONE_TASKS: 'noted_standalone_tasks',
 };
 
 class WebDatabaseService {
@@ -23,6 +26,9 @@ class WebDatabaseService {
       }
       if (!localStorage.getItem(STORAGE_KEYS.FOLDERS)) {
         localStorage.setItem(STORAGE_KEYS.FOLDERS, JSON.stringify([]));
+      }
+      if (!localStorage.getItem(STORAGE_KEYS.STANDALONE_TASKS)) {
+        localStorage.setItem(STORAGE_KEYS.STANDALONE_TASKS, JSON.stringify([]));
       }
       console.log('✅ Web Database initialized successfully');
     } catch (error) {
@@ -61,11 +67,14 @@ class WebDatabaseService {
     // Convert date strings back to Date objects
     return notes.map((note: any) => ({
       ...note,
+      noteFormat: note.noteFormat || NoteFormat.NOTE, // Backwards compatibility: default to 'note'
       createdAt: new Date(note.createdAt),
       lastModified: new Date(note.lastModified),
       entries: note.entries.map((entry: any) => ({
         ...entry,
         timestamp: new Date(entry.timestamp),
+        entryFormats: entry.entryFormats || [NoteFormat.NOTE], // Backwards compatibility
+        formatData: entry.formatData || {}, // Backwards compatibility
         editHistory: entry.editHistory.map((edit: any) => ({
           ...edit,
           editedAt: new Date(edit.editedAt),
@@ -134,6 +143,26 @@ class WebDatabaseService {
     return note?.entries || [];
   }
 
+  async updateEntry(noteId: string, entryId: string, updates: Partial<Entry>): Promise<void> {
+    const notes = await this.getAllNotes();
+    const note = notes.find(n => n.id === noteId);
+
+    if (!note) throw new Error('Note not found');
+
+    const entryIndex = note.entries.findIndex(e => e.id === entryId);
+    if (entryIndex === -1) throw new Error('Entry not found');
+
+    note.entries[entryIndex] = {
+      ...note.entries[entryIndex],
+      ...updates,
+      isEdited: true,
+      editedAt: new Date(),
+    };
+    note.lastModified = new Date();
+
+    localStorage.setItem(STORAGE_KEYS.NOTES, JSON.stringify(notes));
+  }
+
   async deleteEntry(noteId: string, entryId: string): Promise<void> {
     const notes = await this.getAllNotes();
     const note = notes.find(n => n.id === noteId);
@@ -162,6 +191,8 @@ class WebDatabaseService {
       id,
       description,
       isCompleted: false,
+      createdAt: new Date(),
+      steps: [],
     });
 
     localStorage.setItem(STORAGE_KEYS.NOTES, JSON.stringify(notes));
@@ -182,6 +213,74 @@ class WebDatabaseService {
       if (task) {
         task.isCompleted = !task.isCompleted;
         task.completedAt = task.isCompleted ? new Date() : undefined;
+        localStorage.setItem(STORAGE_KEYS.NOTES, JSON.stringify(notes));
+        return;
+      }
+    }
+
+    throw new Error('Task not found');
+  }
+
+  async addTaskStep(noteId: string, taskId: string, description: string): Promise<string> {
+    const stepId = `step_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const notes = await this.getAllNotes();
+
+    for (const note of notes) {
+      if (note.id === noteId) {
+        const task = note.tasks.find(t => t.id === taskId);
+        if (task) {
+          task.steps.push({
+            id: stepId,
+            description,
+            isCompleted: false,
+            createdAt: new Date(),
+          });
+          localStorage.setItem(STORAGE_KEYS.NOTES, JSON.stringify(notes));
+          return stepId;
+        }
+      }
+    }
+
+    throw new Error('Task not found');
+  }
+
+  async toggleTaskStep(taskId: string, stepId: string): Promise<void> {
+    const notes = await this.getAllNotes();
+
+    for (const note of notes) {
+      const task = note.tasks.find(t => t.id === taskId);
+      if (task) {
+        const step = task.steps.find(s => s.id === stepId);
+        if (step) {
+          step.isCompleted = !step.isCompleted;
+          step.completedAt = step.isCompleted ? new Date() : undefined;
+
+          // Check if all steps are completed
+          const allStepsCompleted = task.steps.length > 0 && task.steps.every(s => s.isCompleted);
+          if (allStepsCompleted && !task.isCompleted) {
+            task.isCompleted = true;
+            task.completedAt = new Date();
+          } else if (!allStepsCompleted && task.isCompleted) {
+            task.isCompleted = false;
+            task.completedAt = undefined;
+          }
+
+          localStorage.setItem(STORAGE_KEYS.NOTES, JSON.stringify(notes));
+          return;
+        }
+      }
+    }
+
+    throw new Error('Step not found');
+  }
+
+  async deleteTask(taskId: string): Promise<void> {
+    const notes = await this.getAllNotes();
+
+    for (const note of notes) {
+      const taskIndex = note.tasks.findIndex(t => t.id === taskId);
+      if (taskIndex !== -1) {
+        note.tasks.splice(taskIndex, 1);
         localStorage.setItem(STORAGE_KEYS.NOTES, JSON.stringify(notes));
         return;
       }
@@ -223,6 +322,232 @@ class WebDatabaseService {
       ...folder,
       createdAt: new Date(folder.createdAt),
     }));
+  }
+
+  async deleteFolder(folderId: string): Promise<void> {
+    const foldersJson = localStorage.getItem(STORAGE_KEYS.FOLDERS);
+    if (!foldersJson) return;
+
+    const folders: Folder[] = JSON.parse(foldersJson);
+    const updatedFolders = folders.filter(folder => folder.id !== folderId);
+
+    localStorage.setItem(STORAGE_KEYS.FOLDERS, JSON.stringify(updatedFolders));
+  }
+
+  // ============================================
+  // STANDALONE TASKS Operations
+  // ============================================
+
+  async createStandaloneTask(description: string): Promise<string> {
+    const id = `standalone_task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    const newTask: StandaloneTask = {
+      id,
+      description,
+      isCompleted: false,
+      createdAt: new Date(),
+      urgency: UrgencyLevel.NONE,
+      importance: 0,
+      hashtags: [],
+      steps: [],
+      notificationEnabled: true, // Default to enabled
+    };
+
+    const tasksJson = localStorage.getItem(STORAGE_KEYS.STANDALONE_TASKS);
+    const tasks: StandaloneTask[] = tasksJson ? JSON.parse(tasksJson) : [];
+    tasks.push(newTask);
+
+    localStorage.setItem(STORAGE_KEYS.STANDALONE_TASKS, JSON.stringify(tasks));
+    return id;
+  }
+
+  async getAllStandaloneTasks(): Promise<StandaloneTask[]> {
+    const tasksJson = localStorage.getItem(STORAGE_KEYS.STANDALONE_TASKS);
+    if (!tasksJson) return [];
+
+    const tasks = JSON.parse(tasksJson);
+
+    return tasks.map((task: any) => ({
+      ...task,
+      createdAt: new Date(task.createdAt),
+      completedAt: task.completedAt ? new Date(task.completedAt) : undefined,
+      lastEditedAt: task.lastEditedAt ? new Date(task.lastEditedAt) : undefined,
+      dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
+      reminderTime: task.reminderTime ? new Date(task.reminderTime) : undefined,
+      notificationEnabled: task.notificationEnabled ?? true, // Default to true for backward compatibility
+      steps: task.steps || [], // Ensure steps array exists for backward compatibility
+    }));
+  }
+
+  async updateStandaloneTask(taskId: string, updates: Partial<StandaloneTask>): Promise<void> {
+    const tasksJson = localStorage.getItem(STORAGE_KEYS.STANDALONE_TASKS);
+    if (!tasksJson) return;
+
+    const tasks: StandaloneTask[] = JSON.parse(tasksJson);
+    const taskIndex = tasks.findIndex(t => t.id === taskId);
+
+    if (taskIndex === -1) throw new Error('Task not found');
+
+    tasks[taskIndex] = {
+      ...tasks[taskIndex],
+      ...updates,
+    };
+
+    localStorage.setItem(STORAGE_KEYS.STANDALONE_TASKS, JSON.stringify(tasks));
+  }
+
+  async toggleStandaloneTask(taskId: string): Promise<void> {
+    const tasksJson = localStorage.getItem(STORAGE_KEYS.STANDALONE_TASKS);
+    if (!tasksJson) return;
+
+    const tasks: StandaloneTask[] = JSON.parse(tasksJson);
+    const task = tasks.find(t => t.id === taskId);
+
+    if (!task) throw new Error('Task not found');
+
+    task.isCompleted = !task.isCompleted;
+    task.completedAt = task.isCompleted ? new Date() : undefined;
+
+    localStorage.setItem(STORAGE_KEYS.STANDALONE_TASKS, JSON.stringify(tasks));
+  }
+
+  async deleteStandaloneTask(taskId: string): Promise<void> {
+    const tasksJson = localStorage.getItem(STORAGE_KEYS.STANDALONE_TASKS);
+    if (!tasksJson) return;
+
+    const tasks: StandaloneTask[] = JSON.parse(tasksJson);
+    const updatedTasks = tasks.filter(t => t.id !== taskId);
+
+    localStorage.setItem(STORAGE_KEYS.STANDALONE_TASKS, JSON.stringify(updatedTasks));
+  }
+
+  async addStandaloneTaskStep(taskId: string, description: string): Promise<string> {
+    const stepId = `step_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const tasksJson = localStorage.getItem(STORAGE_KEYS.STANDALONE_TASKS);
+    if (!tasksJson) throw new Error('Tasks not found');
+
+    const tasks: StandaloneTask[] = JSON.parse(tasksJson);
+    const task = tasks.find(t => t.id === taskId);
+
+    if (!task) throw new Error('Task not found');
+
+    // Initialize steps array if it doesn't exist (for backward compatibility)
+    if (!task.steps) {
+      task.steps = [];
+    }
+
+    task.steps.push({
+      id: stepId,
+      description,
+      isCompleted: false,
+      createdAt: new Date(),
+    });
+
+    localStorage.setItem(STORAGE_KEYS.STANDALONE_TASKS, JSON.stringify(tasks));
+    return stepId;
+  }
+
+  async toggleStandaloneTaskStep(taskId: string, stepId: string): Promise<void> {
+    const tasksJson = localStorage.getItem(STORAGE_KEYS.STANDALONE_TASKS);
+    if (!tasksJson) return;
+
+    const tasks: StandaloneTask[] = JSON.parse(tasksJson);
+    const task = tasks.find(t => t.id === taskId);
+
+    if (!task) return;
+
+    const step = task.steps.find(s => s.id === stepId);
+    if (!step) return;
+
+    step.isCompleted = !step.isCompleted;
+    step.completedAt = step.isCompleted ? new Date() : undefined;
+
+    // Check if all steps are completed - AUTO-COMPLETION LOGIC
+    const allStepsCompleted = task.steps.length > 0 && task.steps.every(s => s.isCompleted);
+    if (allStepsCompleted && !task.isCompleted) {
+      task.isCompleted = true;
+      task.completedAt = new Date();
+    } else if (!allStepsCompleted && task.isCompleted) {
+      task.isCompleted = false;
+      task.completedAt = undefined;
+    }
+
+    localStorage.setItem(STORAGE_KEYS.STANDALONE_TASKS, JSON.stringify(tasks));
+  }
+
+  async deleteStandaloneTaskStep(taskId: string, stepId: string): Promise<void> {
+    const tasksJson = localStorage.getItem(STORAGE_KEYS.STANDALONE_TASKS);
+    if (!tasksJson) return;
+
+    const tasks: StandaloneTask[] = JSON.parse(tasksJson);
+    const task = tasks.find(t => t.id === taskId);
+
+    if (!task) return;
+
+    task.steps = task.steps.filter(s => s.id !== stepId);
+
+    localStorage.setItem(STORAGE_KEYS.STANDALONE_TASKS, JSON.stringify(tasks));
+  }
+
+  // ============================================
+  // MIGRATION Operations
+  // ============================================
+
+  async migrateStandaloneTasksToNotes(): Promise<number> {
+    try {
+      const standaloneTasks = await this.getAllStandaloneTasks();
+
+      if (standaloneTasks.length === 0) {
+        console.log('✅ No standalone tasks to migrate');
+        return 0;
+      }
+
+      console.log(`🔄 Migrating ${standaloneTasks.length} standalone tasks to notes...`);
+
+      // Convert each standalone task to a note with task format
+      for (const task of standaloneTasks) {
+        const taskNote: Note = {
+          id: `note_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          title: task.description,
+          createdAt: task.createdAt,
+          lastModified: task.lastEditedAt || task.createdAt,
+          noteFormat: NoteFormat.TASK,
+          folderId: undefined,
+          hashtags: task.hashtags || [],
+          linkedNoteIds: [],
+          urgency: task.urgency,
+          importance: task.importance,
+          pipelineStage: undefined,
+          progressPercentage: 0,
+          pipelineGroupId: undefined,
+          entries: [],
+          tasks: [{
+            id: `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            description: task.description,
+            isCompleted: task.isCompleted,
+            completedAt: task.completedAt,
+            createdAt: task.createdAt,
+            steps: task.steps || [],
+          }],
+          totalDeepWorkTime: 0,
+          deepWorkSessionCount: 0,
+        };
+
+        // Save the new note
+        const notes = await this.getAllNotes();
+        notes.push(taskNote);
+        localStorage.setItem(STORAGE_KEYS.NOTES, JSON.stringify(notes));
+      }
+
+      // Clear standalone tasks after migration
+      localStorage.setItem(STORAGE_KEYS.STANDALONE_TASKS, JSON.stringify([]));
+
+      console.log(`✅ Successfully migrated ${standaloneTasks.length} tasks to notes`);
+      return standaloneTasks.length;
+    } catch (error) {
+      console.error('❌ Failed to migrate tasks:', error);
+      throw error;
+    }
   }
 }
 

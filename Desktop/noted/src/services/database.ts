@@ -416,6 +416,22 @@ class DatabaseService {
     });
   }
 
+  async updateEntry(noteId: string, entryId: string, updates: Partial<Entry>): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.db!.transaction((tx) => {
+        tx.executeSql(
+          `UPDATE entries SET content = ? WHERE id = ? AND noteId = ?`,
+          [updates.content || '', entryId, noteId],
+          () => resolve(),
+          (_, error) => {
+            reject(error);
+            return false;
+          }
+        );
+      });
+    });
+  }
+
   async getEntriesByNoteId(noteId: string): Promise<Entry[]> {
     return new Promise((resolve, reject) => {
       this.db!.transaction((tx) => {

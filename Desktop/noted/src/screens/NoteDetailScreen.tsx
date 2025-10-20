@@ -16,18 +16,42 @@ import {
 import { useStore } from '../store';
 import { COLORS, FONTS, FONT_SIZES, SPACING, ICONS, getThemedColors } from '../theme';
 import { formatDate, formatTime, groupEntriesByDate } from '../utils';
-import type { Entry } from '../types';
+import type { Entry, EntryFormatData } from '../types';
+import { UrgencyLevel, NoteFormat, FORMAT_EMOJIS } from '../types';
+import { TaskBlock } from '../components/TaskBlock';
+import { ProjectBlock } from '../components/ProjectBlock';
+import { GoalBlock } from '../components/GoalBlock';
 
 export const NoteDetailScreen = ({ route, navigation }: any) => {
-  const { noteId } = route.params;
-  const { currentNote, setCurrentNote, addEntry, updateNote, deleteNote, deleteEntry, isDarkMode } = useStore();
+  const { noteId, filterFormat } = route.params;
+  const {
+    currentNote,
+    setCurrentNote,
+    addEntry,
+    updateEntry,
+    updateNote,
+    deleteNote,
+    deleteEntry,
+    createTask,
+    addTaskStep,
+    toggleTaskStep,
+    deleteTask,
+    isDarkMode
+  } = useStore();
   const [noteTitle, setNoteTitle] = useState('');
   const [noteContent, setNoteContent] = useState('');
   const [isEditing, setIsEditing] = useState(true); // Start in edit mode for new notes
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null); // Track which entry is being edited
   const [showNavigator, setShowNavigator] = useState(false);
   const [reverseOrder, setReverseOrder] = useState(false);
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null); // Track which task is expanded
+  const [newStepText, setNewStepText] = useState(''); // New step input
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // NEW: Entry-level format states
+  const [activeFormats, setActiveFormats] = useState<NoteFormat[]>([NoteFormat.NOTE]);
+  const [currentFormatData, setCurrentFormatData] = useState<any>({});
+  const [collapsedEntries, setCollapsedEntries] = useState<{ [entryId: string]: boolean }>({});
 
   const colors = getThemedColors(isDarkMode);
 
@@ -43,24 +67,30 @@ export const NoteDetailScreen = ({ route, navigation }: any) => {
         if (note.entries.length > 0) {
           setIsEditing(false);
         }
+
+        // Auto-expand entries with the filtered format
+        if (filterFormat) {
+          const newCollapsedState: { [entryId: string]: boolean } = {};
+          note.entries.forEach(entry => {
+            // Collapse entries that DON'T have the filtered format
+            const hasFormat = entry.entryFormats?.includes(filterFormat);
+            newCollapsedState[entry.id] = !hasFormat;
+          });
+          setCollapsedEntries(newCollapsedState);
+        }
       }
     };
     loadNote();
 
     return () => setCurrentNote(null);
-  }, [noteId]);
-
-  useEffect(() => {
-    // Scroll to bottom (latest entry) when note loads (if NOT reversed)
-    if (!reverseOrder && !isEditing) {
-      setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    }
-  }, [currentNote?.id, reverseOrder, isEditing]);
+  }, [noteId, filterFormat]);
 
   const handleSaveEntry = async () => {
-    if (!noteContent.trim() || !currentNote) return;
+    if (!noteContent.trim() && activeFormats.length === 1 && activeFormats[0] === NoteFormat.NOTE) {
+      // Don't save if there's no content and no special formats
+      return;
+    }
+    if (!currentNote) return;
 
     try {
       // Update title if changed
@@ -69,17 +99,18 @@ export const NoteDetailScreen = ({ route, navigation }: any) => {
       }
 
       if (editingEntryId) {
-        // Editing existing entry - need to implement updateEntry in store
-        // For now, we'll add this as a new timestamped entry showing it's an edit
-        await addEntry(currentNote.id, noteContent);
+        // Update existing entry with formats and formatData
+        await updateEntry(currentNote.id, editingEntryId, noteContent, activeFormats, currentFormatData);
         setEditingEntryId(null);
       } else {
-        // Add new entry with the content
-        await addEntry(currentNote.id, noteContent);
+        // Add new entry with formats and formatData
+        await addEntry(currentNote.id, noteContent, activeFormats, currentFormatData);
       }
 
-      // Clear content and switch to view mode
+      // Clear content, reset formats, and switch to view mode
       setNoteContent('');
+      setActiveFormats([NoteFormat.NOTE]);
+      setCurrentFormatData({});
       setIsEditing(false);
 
       // Reload note
@@ -100,10 +131,70 @@ export const NoteDetailScreen = ({ route, navigation }: any) => {
   };
 
   const handleEditEntry = (entry: Entry) => {
-    // Load existing entry content for editing
+    // Load existing entry content AND formats for editing
     setIsEditing(true);
     setNoteContent(entry.content);
     setEditingEntryId(entry.id);
+    // Load the entry's formats
+    setActiveFormats(entry.entryFormats || [NoteFormat.NOTE]);
+    setCurrentFormatData(entry.formatData || {});
+  };
+
+  const handleToggleFormat = (format: NoteFormat) => {
+    setActiveFormats(prev => {
+      if (prev.includes(format)) {
+        // Remove format (but keep at least NOTE format)
+        const filtered = prev.filter(f => f !== format);
+        return filtered.length > 0 ? filtered : [NoteFormat.NOTE];
+      } else {
+        // Add format
+        return [...prev, format];
+      }
+    });
+  };
+
+  const handleBack = () => {
+    if (isEditing) {
+      // If editing, cancel edit and return to view mode
+      setIsEditing(false);
+      setNoteContent('');
+      setEditingEntryId(null);
+      setActiveFormats([NoteFormat.NOTE]);
+      setCurrentFormatData({});
+    } else {
+      // If viewing, go back to home
+      navigation.goBack();
+    }
+  };
+
+  const handleSetUrgency = async (urgency: UrgencyLevel) => {
+    if (!currentNote) return;
+
+    try {
+      await updateNote(currentNote.id, { urgency });
+    } catch (error) {
+      console.error('Failed to update urgency:', error);
+    }
+  };
+
+  const handleSetImportance = async (importance: number) => {
+    if (!currentNote) return;
+
+    try {
+      await updateNote(currentNote.id, { importance });
+    } catch (error) {
+      console.error('Failed to update importance:', error);
+    }
+  };
+
+  const handleSetFormat = async (format: NoteFormat) => {
+    if (!currentNote) return;
+
+    try {
+      await updateNote(currentNote.id, { noteFormat: format });
+    } catch (error) {
+      console.error('Failed to update format:', error);
+    }
   };
 
   const handleDeleteNote = async () => {
@@ -134,6 +225,70 @@ export const NoteDetailScreen = ({ route, navigation }: any) => {
     }
   };
 
+  const handleCreateTask = async () => {
+    if (!currentNote) return;
+
+    const taskDescription = prompt('Task description:');
+    if (!taskDescription || !taskDescription.trim()) return;
+
+    try {
+      await createTask(currentNote.id, taskDescription.trim());
+    } catch (error) {
+      console.error('Failed to create task:', error);
+    }
+  };
+
+  const handleToggleTask = async (taskId: string) => {
+    if (!currentNote) return;
+
+    const task = currentNote.tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    // If task has steps, only toggle via steps completion
+    if (task.steps && task.steps.length > 0) {
+      alert('Complete all steps to finish this task');
+      return;
+    }
+
+    // For tasks without steps, toggle directly
+    try {
+      await toggleTaskStep(taskId, ''); // Empty stepId toggles the task itself
+    } catch (error) {
+      console.error('Failed to toggle task:', error);
+    }
+  };
+
+  const handleToggleStep = async (taskId: string, stepId: string) => {
+    try {
+      await toggleTaskStep(taskId, stepId);
+    } catch (error) {
+      console.error('Failed to toggle step:', error);
+    }
+  };
+
+  const handleAddStep = async (taskId: string) => {
+    if (!currentNote || !newStepText.trim()) return;
+
+    try {
+      await addTaskStep(currentNote.id, taskId, newStepText.trim());
+      setNewStepText('');
+    } catch (error) {
+      console.error('Failed to add step:', error);
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    const confirmed = confirm('Delete this task? This cannot be undone.');
+    if (!confirmed) return;
+
+    try {
+      await deleteTask(taskId);
+      setExpandedTaskId(null);
+    } catch (error) {
+      console.error('Failed to delete task:', error);
+    }
+  };
+
   const handleJumpToEntry = (entryId: string) => {
     setShowNavigator(false);
     // In a real implementation, you would scroll to the specific entry
@@ -154,20 +309,6 @@ export const NoteDetailScreen = ({ route, navigation }: any) => {
   // Reverse order if needed (latest first)
   const displayedGroups = reverseOrder ? [...groupedEntries].reverse() : groupedEntries;
 
-  const handleJumpToLatest = () => {
-    setReverseOrder(false);
-    setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 100);
-  };
-
-  const handleJumpToFirst = () => {
-    setReverseOrder(false);
-    setTimeout(() => {
-      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-    }, 100);
-  };
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
@@ -175,13 +316,14 @@ export const NoteDetailScreen = ({ route, navigation }: any) => {
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <View style={styles.headerLeft}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
+          <TouchableOpacity onPress={handleBack}>
             <Text style={[styles.backText, { color: colors.accent }]}>
               {ICONS.general.back}
             </Text>
           </TouchableOpacity>
-          <Text style={[styles.appName, { color: colors.text }]}>Noted.</Text>
         </View>
+
+        <Text style={[styles.appName, { color: colors.text }]}>NOTED.</Text>
 
         <View style={styles.headerButtons}>
           {isEditing && (
@@ -199,7 +341,7 @@ export const NoteDetailScreen = ({ route, navigation }: any) => {
 
       {isEditing ? (
         /* EDITING MODE - Full Page */
-        <View style={styles.editContainer}>
+        <ScrollView style={styles.editContainer}>
           {/* Title Input */}
           <TextInput
             style={[styles.titleInput, { color: colors.text, borderBottomColor: colors.border }, FONTS.medium]}
@@ -210,7 +352,36 @@ export const NoteDetailScreen = ({ route, navigation }: any) => {
             maxLength={100}
           />
 
-          {/* Content Input - Full Page */}
+          {/* Format Buttons - At Top of Entry Editor */}
+          <View style={[styles.entryFormatButtons, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.formatLabel, { color: colors.textSecondary }]}>Formats:</Text>
+            <View style={styles.formatButtonsRow}>
+              {Object.entries(FORMAT_EMOJIS).map(([format, emoji]) => {
+                const formatKey = format as NoteFormat;
+                const isActive = activeFormats.includes(formatKey);
+                return (
+                  <TouchableOpacity
+                    key={format}
+                    style={[
+                      styles.formatButton,
+                      isActive && { backgroundColor: colors.accent },
+                      { borderColor: colors.border }
+                    ]}
+                    onPress={() => handleToggleFormat(formatKey)}
+                  >
+                    <Text style={[
+                      styles.formatButtonEmoji,
+                      isActive && { color: '#FFFFFF' }
+                    ]}>
+                      {emoji}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Content Input */}
           <TextInput
             style={[styles.contentInput, { color: colors.text }, FONTS.regular]}
             placeholder="Start typing..."
@@ -221,7 +392,40 @@ export const NoteDetailScreen = ({ route, navigation }: any) => {
             textAlignVertical="top"
             autoFocus
           />
-        </View>
+
+          {/* Format Blocks */}
+          <View style={styles.formatBlocksContainer}>
+            {activeFormats.includes(NoteFormat.TASK) && (
+              <TaskBlock
+                tasks={currentFormatData.tasks || []}
+                onTasksChange={(tasks) => {
+                  setCurrentFormatData({...currentFormatData, tasks});
+                }}
+                colors={colors}
+              />
+            )}
+
+            {activeFormats.includes(NoteFormat.PROJECT) && (
+              <ProjectBlock
+                milestones={currentFormatData.projectMilestones || []}
+                onMilestonesChange={(milestones) => {
+                  setCurrentFormatData({...currentFormatData, projectMilestones: milestones});
+                }}
+                colors={colors}
+              />
+            )}
+
+            {activeFormats.includes(NoteFormat.GOAL) && (
+              <GoalBlock
+                goalData={currentFormatData.goalProgress || {description: '', progress: 0}}
+                onGoalChange={(goalData) => {
+                  setCurrentFormatData({...currentFormatData, goalProgress: goalData});
+                }}
+                colors={colors}
+              />
+            )}
+          </View>
+        </ScrollView>
       ) : (
         /* VIEW MODE - Timeline */
         <>
@@ -248,28 +452,223 @@ export const NoteDetailScreen = ({ route, navigation }: any) => {
             />
 
             {/* Right side controls */}
-            {groupedEntries.length > 0 && (
-              <View style={styles.titleControls}>
-                {/* Entry Finder */}
-                <TouchableOpacity onPress={() => setShowNavigator(true)} style={styles.entryFinder}>
-                  <Text style={[styles.entryFinderLabel, { color: colors.textSecondary }]}>
-                    entry finder
-                  </Text>
-                  <Text style={styles.watchIcon}>{ICONS.general.navigator}</Text>
-                </TouchableOpacity>
+            <View style={styles.titleControls}>
+              {/* Priority Controls */}
+              {currentNote && (
+                <View style={styles.priorityControls}>
+                  {/* Urgency */}
+                  <View style={styles.prioritySection}>
+                    <Text style={[styles.priorityLabel, { color: colors.textSecondary }]}>Urgency</Text>
+                    <View style={styles.urgencyButtons}>
+                      <TouchableOpacity
+                        onPress={() => handleSetUrgency(UrgencyLevel.HIGH)}
+                        style={[
+                          styles.urgencyButton,
+                          currentNote.urgency === UrgencyLevel.HIGH && styles.urgencyButtonActive
+                        ]}
+                      >
+                        <Text style={styles.urgencyEmoji}>🔴</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleSetUrgency(UrgencyLevel.MEDIUM)}
+                        style={[
+                          styles.urgencyButton,
+                          currentNote.urgency === UrgencyLevel.MEDIUM && styles.urgencyButtonActive
+                        ]}
+                      >
+                        <Text style={styles.urgencyEmoji}>🟡</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleSetUrgency(UrgencyLevel.LOW)}
+                        style={[
+                          styles.urgencyButton,
+                          currentNote.urgency === UrgencyLevel.LOW && styles.urgencyButtonActive
+                        ]}
+                      >
+                        <Text style={styles.urgencyEmoji}>🟢</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
 
-                {/* Order Toggle */}
-                <TouchableOpacity onPress={() => setReverseOrder(!reverseOrder)} style={styles.orderToggle}>
-                  <Text style={[styles.orderToggleLabel, { color: colors.textSecondary }]}>
-                    entry order
-                  </Text>
-                  <Text style={[styles.orderToggleText, { color: colors.accent }]}>
-                    {reverseOrder ? '↓' : '↑'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
+                  {/* Importance */}
+                  <View style={styles.prioritySection}>
+                    <Text style={[styles.priorityLabel, { color: colors.textSecondary }]}>Importance</Text>
+                    <View style={styles.starsRow}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <TouchableOpacity
+                          key={star}
+                          onPress={() => handleSetImportance(star)}
+                        >
+                          <Text style={styles.starIcon}>
+                            {star <= currentNote.importance ? '⭐' : '☆'}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              {/* Entry Finder & Order Toggle - Stacked Vertically */}
+              {groupedEntries.length > 0 && (
+                <View style={styles.entryControls}>
+                  {/* Entry Finder */}
+                  <TouchableOpacity onPress={() => setShowNavigator(true)} style={styles.entryFinder}>
+                    <Text style={[styles.entryFinderLabel, { color: colors.textSecondary }]}>
+                      entry finder
+                    </Text>
+                    <Text style={styles.watchIcon}>{ICONS.general.navigator}</Text>
+                  </TouchableOpacity>
+
+                  {/* Order Toggle */}
+                  <TouchableOpacity onPress={() => setReverseOrder(!reverseOrder)} style={styles.orderToggle}>
+                    <Text style={[styles.orderToggleLabel, { color: colors.textSecondary }]}>
+                      entry order
+                    </Text>
+                    <Text style={[styles.orderToggleText, { color: colors.accent }]}>
+                      {reverseOrder ? '↓' : '↑'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
           </View>
+
+          {/* Tasks Section - Only show for TASK format */}
+          {currentNote.noteFormat === NoteFormat.TASK && currentNote.tasks && currentNote.tasks.length > 0 && (
+            <View style={[styles.tasksSection, { borderBottomColor: colors.border }]}>
+              {currentNote.tasks.map((task, index) => {
+                const isExpanded = expandedTaskId === task.id;
+                const completedSteps = task.steps?.filter(s => s.isCompleted).length || 0;
+                const totalSteps = task.steps?.length || 0;
+                const hasSteps = totalSteps > 0;
+
+                return (
+                  <View key={task.id} style={[styles.taskCard, { borderBottomColor: colors.border }]}>
+                    {/* Task Header */}
+                    <TouchableOpacity
+                      style={styles.taskHeader}
+                      onPress={() => setExpandedTaskId(isExpanded ? null : task.id)}
+                    >
+                      {/* Checkbox - Hidden for completed tasks */}
+                      {!task.isCompleted && (
+                        <TouchableOpacity
+                          onPress={() => hasSteps ? null : handleToggleTask(task.id)}
+                          disabled={hasSteps}
+                        >
+                          <View
+                            style={[
+                              styles.taskCheckbox,
+                              { borderColor: colors.border },
+                            ]}
+                          >
+                          </View>
+                        </TouchableOpacity>
+                      )}
+
+                      {/* Task Description */}
+                      <View style={styles.taskContent}>
+                        <Text
+                          style={[
+                            styles.taskDescription,
+                            { color: colors.text },
+                            task.isCompleted && styles.taskCompletedText,
+                          ]}
+                        >
+                          {task.description}
+                        </Text>
+
+                        {/* Timestamps */}
+                        <Text style={[styles.taskTimestamp, { color: colors.textSecondary }]}>
+                          Created {formatTime(task.createdAt)}
+                          {task.completedAt && ` • Completed ${formatTime(task.completedAt)}`}
+                        </Text>
+
+                        {/* Progress if has steps */}
+                        {hasSteps && (
+                          <Text style={[styles.taskProgress, { color: colors.textSecondary }]}>
+                            {completedSteps}/{totalSteps} steps completed
+                          </Text>
+                        )}
+                      </View>
+
+                      {/* Expand indicator */}
+                      <Text style={[styles.expandIndicator, { color: colors.textSecondary }]}>
+                        {isExpanded ? '▼' : '▶'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* Expanded: Steps */}
+                    {isExpanded && (
+                      <View style={styles.taskSteps}>
+                        {task.steps && task.steps.map((step, stepIndex) => (
+                          <View key={step.id} style={styles.stepRow}>
+                            {/* Step Checkbox */}
+                            <TouchableOpacity onPress={() => handleToggleStep(task.id, step.id)}>
+                              <View
+                                style={[
+                                  styles.stepCheckbox,
+                                  { borderColor: colors.border },
+                                  step.isCompleted && { backgroundColor: colors.accent, borderColor: colors.accent },
+                                ]}
+                              >
+                                {step.isCompleted && <Text style={styles.stepCheckmark}>✓</Text>}
+                              </View>
+                            </TouchableOpacity>
+
+                            {/* Step Description */}
+                            <View style={styles.stepContent}>
+                              <Text
+                                style={[
+                                  styles.stepDescription,
+                                  { color: colors.text },
+                                  step.isCompleted && styles.stepCompletedText,
+                                ]}
+                              >
+                                {stepIndex + 1}. {step.description}
+                              </Text>
+                              <Text style={[styles.stepTimestamp, { color: colors.textSecondary }]}>
+                                Created {formatTime(step.createdAt)}
+                                {step.completedAt && ` • Completed ${formatTime(step.completedAt)}`}
+                              </Text>
+                            </View>
+                          </View>
+                        ))}
+
+                        {/* Add Step Input */}
+                        <View style={styles.addStepRow}>
+                          <TextInput
+                            style={[styles.addStepInput, { color: colors.text, borderColor: colors.border }]}
+                            placeholder="Add a step..."
+                            placeholderTextColor={colors.textSecondary}
+                            value={newStepText}
+                            onChangeText={setNewStepText}
+                            onSubmitEditing={() => handleAddStep(task.id)}
+                          />
+                          <TouchableOpacity
+                            onPress={() => handleAddStep(task.id)}
+                            disabled={!newStepText.trim()}
+                          >
+                            <Text style={[styles.addStepButton, { color: newStepText.trim() ? colors.accent : colors.textSecondary }]}>
+                              +
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        {/* Delete Task */}
+                        <TouchableOpacity
+                          onPress={() => handleDeleteTask(task.id)}
+                          style={styles.deleteTaskButton}
+                        >
+                          <Text style={styles.deleteTaskText}>Delete Task</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          )}
 
           {/* Timeline */}
           <ScrollView
@@ -296,31 +695,131 @@ export const NoteDetailScreen = ({ route, navigation }: any) => {
                   </View>
 
                   {/* Entries for this date */}
-                  {displayedEntries.map(entry => (
-                    <View key={entry.id} style={styles.entry}>
-                      <View style={styles.entryHeader}>
-                        <Text style={[styles.timeText, { color: colors.textSecondary }]}>
-                          {formatTime(entry.timestamp)}
-                        </Text>
-                        <View style={styles.entryActions}>
-                          <TouchableOpacity onPress={() => handleEditEntry(entry)}>
-                            <Text style={[styles.editEntryButton, { color: colors.accent }]}>
-                              edit
-                            </Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={() => handleDeleteEntry(entry.id)}>
-                            <Text style={[styles.deleteEntryButton, { color: '#FF3B30' }]}>
-                              🗑️
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
+                  {displayedEntries.map(entry => {
+                    const isCollapsed = collapsedEntries[entry.id] || false;
+                    const entryFormats = entry.entryFormats || [NoteFormat.NOTE];
+                    const isHighlighted = filterFormat && entry.entryFormats?.includes(filterFormat);
 
-                      <Text style={[styles.entryText, { color: colors.text }]}>
-                        {entry.content}
-                      </Text>
-                    </View>
-                  ))}
+                    return (
+                      <View
+                        key={entry.id}
+                        style={[
+                          styles.entry,
+                          isHighlighted && { backgroundColor: colors.accent + '10', borderLeftWidth: 3, borderLeftColor: colors.accent }
+                        ]}
+                      >
+                        <View style={styles.entryHeader}>
+                          <TouchableOpacity
+                            onPress={() => {
+                              setCollapsedEntries(prev => ({
+                                ...prev,
+                                [entry.id]: !isCollapsed
+                              }));
+                            }}
+                            style={styles.expandToggle}
+                          >
+                            <Text style={[styles.expandIcon, { color: colors.textSecondary }]}>
+                              {isCollapsed ? '▶' : '▼'}
+                            </Text>
+                          </TouchableOpacity>
+
+                          <Text style={[styles.formatEmojis, { color: colors.text }]}>
+                            [{entryFormats.map(f => FORMAT_EMOJIS[f]).join('')}]
+                          </Text>
+
+                          <Text style={[styles.timeText, { color: colors.textSecondary }]}>
+                            {formatTime(entry.timestamp)}
+                            {entry.isEdited && entry.editedAt && (
+                              <Text style={{ opacity: 0.7 }}> • Edited {formatTime(entry.editedAt)}</Text>
+                            )}
+                          </Text>
+
+                          <View style={styles.entryActions}>
+                            <TouchableOpacity onPress={() => handleEditEntry(entry)}>
+                              <Text style={[styles.editEntryButton, { color: colors.accent }]}>
+                                edit
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => handleDeleteEntry(entry.id)}>
+                              <Text style={[styles.deleteEntryButton, { color: '#FF3B30' }]}>
+                                🗑️
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
+                        {/* Preview when collapsed */}
+                        {isCollapsed && entry.content && (
+                          <Text style={[styles.entryPreview, { color: colors.textSecondary }]} numberOfLines={2}>
+                            {entry.content}
+                          </Text>
+                        )}
+
+                        {!isCollapsed && (
+                          <View style={styles.entryContent}>
+                            {/* Text Content */}
+                            {entry.content && (
+                              <Text style={[styles.entryText, { color: colors.text }]}>
+                                {entry.content}
+                              </Text>
+                            )}
+
+                            {/* Format Blocks (Read-only) */}
+                            {entry.entryFormats?.includes(NoteFormat.TASK) && entry.formatData?.tasks && (
+                              <View style={[
+                                styles.entryFormatBlock,
+                                filterFormat === NoteFormat.TASK && styles.highlightedFormatBlock
+                              ]}>
+                                <Text style={[styles.formatBlockTitle, { color: colors.text }]}>✅ Tasks:</Text>
+                                {entry.formatData.tasks.map((task: any) => (
+                                  <Text key={task.id} style={[
+                                    styles.formatBlockItem,
+                                    { color: colors.text },
+                                    task.isCompleted && styles.completedItem
+                                  ]}>
+                                    {task.isCompleted ? '✓' : '□'} {task.description}
+                                  </Text>
+                                ))}
+                              </View>
+                            )}
+
+                            {entry.entryFormats?.includes(NoteFormat.PROJECT) && entry.formatData?.projectMilestones && (
+                              <View style={[
+                                styles.entryFormatBlock,
+                                filterFormat === NoteFormat.PROJECT && styles.highlightedFormatBlock
+                              ]}>
+                                <Text style={[styles.formatBlockTitle, { color: colors.text }]}>🚀 Project:</Text>
+                                {entry.formatData.projectMilestones.map((m: any) => (
+                                  <Text key={m.id} style={[
+                                    styles.formatBlockItem,
+                                    { color: colors.text },
+                                    m.isCompleted && styles.completedItem
+                                  ]}>
+                                    {m.isCompleted ? '✓' : '□'} {m.description}
+                                  </Text>
+                                ))}
+                              </View>
+                            )}
+
+                            {entry.entryFormats?.includes(NoteFormat.GOAL) && entry.formatData?.goalProgress && (
+                              <View style={[
+                                styles.entryFormatBlock,
+                                filterFormat === NoteFormat.GOAL && styles.highlightedFormatBlock
+                              ]}>
+                                <Text style={[styles.formatBlockTitle, { color: colors.text }]}>👑 Goal:</Text>
+                                <Text style={[styles.formatBlockItem, { color: colors.text }]}>
+                                  {entry.formatData.goalProgress.description}
+                                </Text>
+                                <Text style={[styles.formatBlockItem, { color: colors.textSecondary }]}>
+                                  Progress: {entry.formatData.goalProgress.progress}%
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
                 </View>
               );
             })
@@ -375,6 +874,9 @@ export const NoteDetailScreen = ({ route, navigation }: any) => {
                     </Text>
                     <Text style={[styles.navigatorTime, { color: colors.textSecondary }]}>
                       {ICONS.general.clock} {formatTime(entry.timestamp)}
+                      {entry.isEdited && entry.editedAt && (
+                        <Text style={{ opacity: 0.7 }}> • Edited {formatTime(entry.editedAt)}</Text>
+                      )}
                     </Text>
                   </View>
 
@@ -420,9 +922,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
+    width: 60,
+    zIndex: 10,
   },
   backText: {
     fontSize: 24,
@@ -430,11 +931,63 @@ const styles = StyleSheet.create({
   appName: {
     ...FONTS.bold,
     fontSize: 32,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    zIndex: 1,
   },
   headerButtons: {
+    width: 60,
+    alignItems: 'flex-end',
+    zIndex: 10,
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  priorityControls: {
+    flexDirection: 'column',
+    gap: SPACING.xs,
+    alignItems: 'center',
+  },
+  prioritySection: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.md,
+    gap: SPACING.xs,
+  },
+  priorityLabel: {
+    ...FONTS.regular,
+    fontSize: FONT_SIZES.timestamp,
+    minWidth: 70,
+  },
+  urgencyButtons: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+  },
+  urgencyButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    opacity: 0.4,
+  },
+  urgencyButtonActive: {
+    opacity: 1,
+    transform: [{ scale: 1.1 }],
+  },
+  urgencyEmoji: {
+    fontSize: 16,
+  },
+  starsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  starIcon: {
+    fontSize: 16,
   },
   saveText: {
     ...FONTS.medium,
@@ -491,6 +1044,52 @@ const styles = StyleSheet.create({
     ...FONTS.regular,
     fontSize: FONT_SIZES.body,
     lineHeight: FONT_SIZES.body * 1.6,
+  },
+  entryPreview: {
+    ...FONTS.regular,
+    fontSize: FONT_SIZES.body,
+    marginTop: SPACING.xs,
+    opacity: 0.7,
+    fontStyle: 'italic',
+  },
+  expandToggle: {
+    paddingRight: SPACING.xs,
+  },
+  expandIcon: {
+    fontSize: 14,
+  },
+  formatEmojis: {
+    ...FONTS.bold,
+    fontSize: FONT_SIZES.timestamp,
+    marginRight: SPACING.sm,
+  },
+  entryContent: {
+    marginTop: SPACING.xs,
+  },
+  entryFormatBlock: {
+    marginTop: SPACING.sm,
+    paddingLeft: SPACING.md,
+    padding: SPACING.sm,
+    borderRadius: 8,
+  },
+  highlightedFormatBlock: {
+    backgroundColor: '#FFD70030',
+    borderLeftWidth: 4,
+    borderLeftColor: '#FFD700',
+  },
+  formatBlockTitle: {
+    ...FONTS.bold,
+    fontSize: FONT_SIZES.body,
+    marginBottom: SPACING.xs,
+  },
+  formatBlockItem: {
+    ...FONTS.regular,
+    fontSize: FONT_SIZES.body,
+    marginBottom: 4,
+  },
+  completedItem: {
+    textDecorationLine: 'line-through',
+    opacity: 0.6,
   },
   deepWorkBadge: {
     marginTop: SPACING.sm,
@@ -640,9 +1239,28 @@ const styles = StyleSheet.create({
   contentInput: {
     ...FONTS.regular,
     fontSize: FONT_SIZES.body,
-    flex: 1,
     lineHeight: FONT_SIZES.body * 1.5,
     paddingTop: SPACING.md,
+    minHeight: 150,
+  },
+  entryFormatButtons: {
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    borderBottomWidth: 1,
+    marginBottom: SPACING.md,
+  },
+  formatButtonsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
+  },
+  formatButtonEmoji: {
+    fontSize: 20,
+  },
+  formatBlocksContainer: {
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.xl,
   },
   // VIEW MODE STYLES
   titleDisplay: {
@@ -658,6 +1276,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   titleControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    flexWrap: 'wrap',
+  },
+  entryControls: {
     alignItems: 'flex-end',
     gap: SPACING.xs,
   },
@@ -696,5 +1320,155 @@ const styles = StyleSheet.create({
     ...FONTS.medium,
     fontSize: FONT_SIZES.timestamp,
     color: '#FFFFFF',
+  },
+  // TASK STYLES
+  tasksSection: {
+    borderBottomWidth: 1,
+    paddingBottom: SPACING.md,
+  },
+  taskCard: {
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.md,
+    borderBottomWidth: 1,
+    paddingBottom: SPACING.sm,
+  },
+  taskHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  taskCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  taskCheckmark: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  taskContent: {
+    flex: 1,
+  },
+  taskDescription: {
+    ...FONTS.medium,
+    fontSize: FONT_SIZES.body,
+  },
+  taskCompletedText: {
+    textDecorationLine: 'line-through',
+    opacity: 0.6,
+  },
+  taskTimestamp: {
+    ...FONTS.regular,
+    fontSize: FONT_SIZES.timestamp,
+    marginTop: SPACING.xs,
+  },
+  taskProgress: {
+    ...FONTS.regular,
+    fontSize: FONT_SIZES.timestamp,
+    marginTop: 2,
+  },
+  expandIndicator: {
+    fontSize: 12,
+  },
+  taskSteps: {
+    marginLeft: 36,
+    marginTop: SPACING.sm,
+    gap: SPACING.sm,
+  },
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+  },
+  stepCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  stepCheckmark: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  stepContent: {
+    flex: 1,
+  },
+  stepDescription: {
+    ...FONTS.regular,
+    fontSize: FONT_SIZES.body,
+  },
+  stepCompletedText: {
+    textDecorationLine: 'line-through',
+    opacity: 0.6,
+  },
+  stepTimestamp: {
+    ...FONTS.regular,
+    fontSize: FONT_SIZES.timestamp,
+    marginTop: 2,
+  },
+  addStepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
+  },
+  addStepInput: {
+    ...FONTS.regular,
+    fontSize: FONT_SIZES.body,
+    flex: 1,
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    borderWidth: 1,
+    borderRadius: 4,
+  },
+  addStepButton: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    width: 32,
+    textAlign: 'center',
+  },
+  deleteTaskButton: {
+    marginTop: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    alignItems: 'center',
+  },
+  deleteTaskText: {
+    ...FONTS.regular,
+    fontSize: FONT_SIZES.timestamp,
+    color: '#FF3B30',
+  },
+  formatToolbar: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+  },
+  formatLabel: {
+    ...FONTS.medium,
+    fontSize: FONT_SIZES.timestamp,
+    marginBottom: SPACING.sm,
+  },
+  formatButtons: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    flexWrap: 'wrap',
+  },
+  formatButton: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: 8,
+    borderWidth: 1,
+    minWidth: 44,
+    alignItems: 'center',
+  },
+  formatButtonText: {
+    fontSize: 20,
   },
 });
