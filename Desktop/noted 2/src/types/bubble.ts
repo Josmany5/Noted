@@ -232,6 +232,7 @@ export interface Bubble {
   hierarchyType?: 'goal' | 'project' | 'task' | 'standalone';
   depth?: number; // 0=top-level, 1=project, 2=task, 3=subtask
   importance?: 1 | 2 | 3 | 4 | 5; // Star rating
+  urgency?: 'none' | 'low' | 'medium' | 'high'; // Urgency level (matches notes system)
 
   // Multi-format entries
   entries?: BubbleEntry[];

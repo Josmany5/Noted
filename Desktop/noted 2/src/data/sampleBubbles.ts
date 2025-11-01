@@ -273,7 +273,9 @@ export const BUBBLE_TYPE_INFO = {
   document: { label: 'Document', emoji: '📄', color: '#4A4A4A', description: 'Rich text documents' },
   planner: { label: 'Planner', emoji: '🗓️', color: '#5AC8FA', description: 'Calendar and event planning' },
   tracker: { label: 'Tracker', emoji: '📈', color: '#FF9500', description: 'Metrics and habit tracking' },
-  meeting: { label: 'Meeting', emoji: '💬', color: '#8E8E93', description: 'Meeting notes with attendees and agenda' }
+  meeting: { label: 'Meeting', emoji: '💬', color: '#8E8E93', description: 'Meeting notes with attendees and agenda' },
+  workout: { label: 'Workout', emoji: '💪', color: '#FF3B30', description: 'Exercise logs with sets, reps, and duration' },
+  budget: { label: 'Budget', emoji: '💰', color: '#34C759', description: 'Financial tracking with income and expenses' }
 };
 
 // Connection type metadata
@@ -283,5 +285,6 @@ export const CONNECTION_TYPE_INFO = {
   part_of: { label: 'Part of', icon: '🧩', color: '#4A90E2' },
   related_to: { label: 'Related to', icon: '↔️', color: '#7ED321' },
   blocks: { label: 'Blocks', icon: '🚧', color: '#FF3B30' },
-  references: { label: 'References', icon: '📎', color: '#8E8E93' }
+  references: { label: 'References', icon: '📎', color: '#8E8E93' },
+  evolved_from: { label: 'Evolved from', icon: '🔄', color: '#BD10E0' }
 };

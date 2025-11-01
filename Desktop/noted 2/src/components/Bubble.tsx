@@ -147,13 +147,49 @@ export const Bubble: React.FC<BubbleProps> = ({
       <View style={styles.header}>
         <Text style={styles.emoji}>{bubble.emoji}</Text>
         <View style={styles.headerText}>
-          <Text style={[styles.title, { color: colors.text }]} numberOfLines={2}>
-            {bubble.title}
-          </Text>
+          <View style={styles.titleRow}>
+            <Text style={[styles.title, { color: colors.text }]} numberOfLines={2}>
+              {bubble.title}
+            </Text>
+            <View style={styles.indicators}>
+              {/* NEW: Urgency Dots (matches notes system) */}
+              {bubble.urgency && bubble.urgency !== 'none' && (
+                <Text style={styles.urgency}>
+                  {bubble.urgency === 'high' && '🔴'}
+                  {bubble.urgency === 'medium' && '🟡'}
+                  {bubble.urgency === 'low' && '🟢'}
+                </Text>
+              )}
+              {/* NEW: Importance Stars */}
+              {bubble.importance && (
+                <Text style={styles.importance}>
+                  {'⭐'.repeat(bubble.importance)}
+                </Text>
+              )}
+            </View>
+          </View>
           <View style={styles.typeContainer}>
             <View style={[styles.typeBadge, { backgroundColor: bubble.color }]}>
               <Text style={styles.typeText}>{typeInfo.label}</Text>
             </View>
+            {/* NEW: Hierarchy Type Badge */}
+            {bubble.hierarchyType && (
+              <View style={[styles.hierarchyBadge, { backgroundColor: colors.surfaceVariant }]}>
+                <Text style={[styles.hierarchyText, { color: colors.textSecondary }]}>
+                  {bubble.hierarchyType === 'goal' && '🎯'}
+                  {bubble.hierarchyType === 'project' && '📋'}
+                  {bubble.hierarchyType === 'task' && '✓'}
+                  {bubble.hierarchyType === 'standalone' && '📌'}
+                  {' '}{bubble.hierarchyType}
+                </Text>
+              </View>
+            )}
+            {/* NEW: Depth Indicator */}
+            {bubble.depth !== undefined && bubble.depth > 0 && (
+              <View style={[styles.depthBadge, { backgroundColor: colors.accent }]}>
+                <Text style={styles.depthText}>↓ {bubble.depth}</Text>
+              </View>
+            )}
           </View>
         </View>
       </View>
@@ -258,10 +294,27 @@ const styles = StyleSheet.create({
   headerText: {
     flex: 1,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.xs,
+  },
   title: {
     ...FONTS.bold,
     fontSize: FONT_SIZES.subtitle,
-    marginBottom: SPACING.xs,
+    flex: 1,
+  },
+  indicators: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  urgency: {
+    fontSize: 14,
+  },
+  importance: {
+    fontSize: 14,
   },
   typeContainer: {
     flexDirection: 'row',
@@ -271,8 +324,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
     borderRadius: 6,
+    marginRight: SPACING.xs,
   },
   typeText: {
+    ...FONTS.medium,
+    fontSize: FONT_SIZES.tiny,
+    color: '#FFFFFF',
+  },
+  hierarchyBadge: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginRight: SPACING.xs,
+  },
+  hierarchyText: {
+    ...FONTS.medium,
+    fontSize: FONT_SIZES.tiny,
+  },
+  depthBadge: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  depthText: {
     ...FONTS.medium,
     fontSize: FONT_SIZES.tiny,
     color: '#FFFFFF',
