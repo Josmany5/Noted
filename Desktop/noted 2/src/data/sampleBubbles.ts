@@ -49,6 +49,9 @@ export const SAMPLE_BUBBLES: Bubble[] = [
     createdAt: new Date(Date.now() - 86400000), // 1 day ago
     updatedAt: new Date(),
     tags: ['development', 'prototype', 'urgent'],
+    importance: 5, // NEW: 5-star importance
+    urgency: 'high', // NEW: High urgency (🔴)
+    hierarchyType: 'task', // NEW: Hierarchy type
     typeData: {
       isCompleted: false,
       dueDate: new Date(Date.now() + 86400000), // Tomorrow
@@ -96,6 +99,9 @@ export const SAMPLE_BUBBLES: Bubble[] = [
     createdAt: new Date(Date.now() - 30 * 86400000), // 30 days ago
     updatedAt: new Date(),
     tags: ['project', 'main', 'prose'],
+    importance: 5, // NEW: 5-star importance
+    urgency: 'medium', // NEW: Medium urgency (🟡)
+    hierarchyType: 'project', // NEW: Hierarchy type
     typeData: {
       progress: 60,
       milestones: [
@@ -144,6 +150,9 @@ export const SAMPLE_BUBBLES: Bubble[] = [
     createdAt: new Date(Date.now() - 60 * 86400000),
     updatedAt: new Date(),
     tags: ['goal', 'growth', 'milestone'],
+    importance: 3, // NEW: 3-star importance
+    urgency: 'low', // NEW: Low urgency (🟢) - long-term goal
+    hierarchyType: 'goal', // NEW: Hierarchy type
     typeData: {
       progress: 25,
       target: '10,000 active users',
@@ -257,6 +266,67 @@ export const SAMPLE_BUBBLES: Bubble[] = [
         connectionType: 'part_of'
       }
     ],
+    childBubbleIds: []
+  },
+
+  // NEW: Workout Bubble
+  {
+    id: 'bubble-8',
+    type: 'workout',
+    title: 'Morning Workout Routine',
+    content: 'Daily strength training and cardio session',
+    emoji: '💪',
+    color: '#FF3B30',
+    position: { x: 50, y: 1150 },
+    createdAt: new Date(Date.now() - 1 * 86400000),
+    updatedAt: new Date(),
+    tags: ['fitness', 'health', 'daily'],
+    importance: 4, // NEW: 4-star importance
+    urgency: 'medium', // NEW: Medium urgency (🟡)
+    hierarchyType: 'task', // NEW: Hierarchy type
+    typeData: {
+      exercises: [
+        { id: 'ex-1', name: 'Push-ups', sets: 3, reps: 15, completed: true },
+        { id: 'ex-2', name: 'Squats', sets: 3, reps: 20, completed: true },
+        { id: 'ex-3', name: 'Plank', sets: 3, reps: 1, duration: 60, completed: false },
+        { id: 'ex-4', name: 'Running', sets: 1, reps: 1, duration: 30, completed: false }
+      ],
+      totalDuration: 45,
+      caloriesBurned: 350
+    },
+    connections: [],
+    childBubbleIds: []
+  },
+
+  // NEW: Budget Bubble
+  {
+    id: 'bubble-9',
+    type: 'budget',
+    title: 'November Budget Tracker',
+    content: 'Monthly income and expense tracking',
+    emoji: '💰',
+    color: '#34C759',
+    position: { x: 50, y: 1300 },
+    createdAt: new Date(Date.now() - 15 * 86400000),
+    updatedAt: new Date(),
+    tags: ['finance', 'budget', 'monthly'],
+    importance: 5, // NEW: 5-star importance
+    urgency: 'high', // NEW: High urgency (🔴)
+    hierarchyType: 'project', // NEW: Hierarchy type
+    depth: 1, // NEW: Depth indicator
+    typeData: {
+      transactions: [
+        { id: 'tx-1', type: 'income' as const, amount: 5000, category: 'Salary', date: new Date(Date.now() - 15 * 86400000), description: 'Monthly salary' },
+        { id: 'tx-2', type: 'expense' as const, amount: 1200, category: 'Rent', date: new Date(Date.now() - 14 * 86400000), description: 'Apartment rent' },
+        { id: 'tx-3', type: 'expense' as const, amount: 450, category: 'Groceries', date: new Date(Date.now() - 10 * 86400000), description: 'Food shopping' },
+        { id: 'tx-4', type: 'expense' as const, amount: 200, category: 'Entertainment', date: new Date(Date.now() - 5 * 86400000), description: 'Movies and dining' },
+        { id: 'tx-5', type: 'income' as const, amount: 500, category: 'Freelance', date: new Date(Date.now() - 3 * 86400000), description: 'Side project' }
+      ],
+      totalIncome: 5500,
+      totalExpenses: 1850,
+      balance: 3650
+    },
+    connections: [],
     childBubbleIds: []
   }
 ];
