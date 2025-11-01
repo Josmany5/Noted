@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, PanResponder, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Bubble } from '../components/Bubble';
@@ -16,6 +16,7 @@ export const BubblePlaygroundScreen: React.FC = () => {
   const [bubbles, setBubbles] = useState<BubbleType[]>(SAMPLE_BUBBLES);
   const [expandedBubbleId, setExpandedBubbleId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
 
   const handleBubblePress = (bubble: BubbleType) => {
     setExpandedBubbleId(expandedBubbleId === bubble.id ? null : bubble.id);
@@ -57,8 +58,53 @@ export const BubblePlaygroundScreen: React.FC = () => {
     setViewMode(viewMode === 'list' ? 'grid' : 'list');
   };
 
-  const renderBubble = (bubble: BubbleType) => (
-    <View key={bubble.id} style={viewMode === 'grid' && styles.gridItem}>
+  const handleReorder = (fromIndex: number, toIndex: number) => {
+    const newBubbles = [...bubbles];
+    const [movedBubble] = newBubbles.splice(fromIndex, 1);
+    newBubbles.splice(toIndex, 0, movedBubble);
+    setBubbles(newBubbles);
+  };
+
+  const handleLongPress = (index: number) => {
+    setDraggingIndex(index);
+    Alert.alert(
+      '🫧 Reorder Bubble',
+      `Long press to drag "${bubbles[index].title}" to reorder.\n\nTip: Tap the ↑ or ↓ buttons to move this bubble up or down in the list.`,
+      [
+        {
+          text: 'Move Up',
+          onPress: () => {
+            if (index > 0) {
+              handleReorder(index, index - 1);
+            }
+            setDraggingIndex(null);
+          },
+        },
+        {
+          text: 'Move Down',
+          onPress: () => {
+            if (index < bubbles.length - 1) {
+              handleReorder(index, index + 1);
+            }
+            setDraggingIndex(null);
+          },
+        },
+        {
+          text: 'Cancel',
+          onPress: () => setDraggingIndex(null),
+          style: 'cancel',
+        },
+      ]
+    );
+  };
+
+  const renderBubble = (bubble: BubbleType, index: number) => (
+    <TouchableOpacity
+      key={bubble.id}
+      style={viewMode === 'grid' && styles.gridItem}
+      onLongPress={() => handleLongPress(index)}
+      delayLongPress={500}
+    >
       <Bubble
         bubble={bubble}
         onPress={handleBubblePress}
@@ -67,7 +113,7 @@ export const BubblePlaygroundScreen: React.FC = () => {
         onTransform={handleTransform}
         isExpanded={expandedBubbleId === bubble.id}
       />
-    </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -118,16 +164,16 @@ export const BubblePlaygroundScreen: React.FC = () => {
           Sample Bubbles ({bubbles.length})
         </Text>
         <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
-          Tap a bubble to expand it and see action buttons
+          Tap to expand • Long press to reorder
         </Text>
 
         {viewMode === 'list' ? (
           <View style={styles.listContainer}>
-            {bubbles.map(renderBubble)}
+            {bubbles.map((bubble, index) => renderBubble(bubble, index))}
           </View>
         ) : (
           <View style={styles.gridView}>
-            {bubbles.map(renderBubble)}
+            {bubbles.map((bubble, index) => renderBubble(bubble, index))}
           </View>
         )}
 
@@ -240,6 +286,8 @@ const styles = StyleSheet.create({
   },
   gridItem: {
     width: '48%',
+    minWidth: 150, // Ensure minimum size
+    maxWidth: 400, // Limit width on web so it doesn't get too wide
   },
   featureInfo: {
     marginTop: SPACING.xl,
