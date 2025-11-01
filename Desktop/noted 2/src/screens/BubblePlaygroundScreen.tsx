@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, PanRespond
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Bubble } from '../components/Bubble';
+import { CreateBubbleModal } from '../components/CreateBubbleModal';
 import { SAMPLE_BUBBLES } from '../data/sampleBubbles';
 import { Bubble as BubbleType } from '../types/bubble';
 import { FONTS, FONT_SIZES, SPACING } from '../theme';
@@ -17,6 +18,7 @@ export const BubblePlaygroundScreen: React.FC = () => {
   const [expandedBubbleId, setExpandedBubbleId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
 
   const handleBubblePress = (bubble: BubbleType) => {
     setExpandedBubbleId(expandedBubbleId === bubble.id ? null : bubble.id);
@@ -46,12 +48,93 @@ export const BubblePlaygroundScreen: React.FC = () => {
     );
   };
 
-  const handleCreateBubble = () => {
+  const handleDelete = (bubble: BubbleType) => {
     Alert.alert(
-      '➕ Create New Bubble',
-      'This would open a creation flow where you can:\n\n1. Choose a bubble type (note, task, project, etc.)\n2. Add a title and emoji\n3. Fill in type-specific details\n4. Position it in the universe\n5. Connect it to other bubbles',
+      '🗑️ Delete Bubble',
+      `Are you sure you want to delete "${bubble.title}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            setBubbles(bubbles.filter((b) => b.id !== bubble.id));
+            setExpandedBubbleId(null);
+            Alert.alert('Deleted', `Bubble "${bubble.title}" has been deleted.`);
+          },
+        },
+      ]
+    );
+  };
+
+  const handleEdit = (bubble: BubbleType) => {
+    Alert.alert(
+      '✏️ Edit Bubble',
+      `Editing "${bubble.title}" - This will open the edit modal (coming next!)`,
       [{ text: 'OK' }]
     );
+  };
+
+  const handleCreateBubble = () => {
+    setCreateModalVisible(true);
+  };
+
+  const handleCreateBubbleSubmit = (bubbleData: {
+    type: BubbleType['type'];
+    title: string;
+    emoji: string;
+    content: string;
+    color: string;
+    urgency?: 'none' | 'low' | 'medium' | 'high';
+    importance?: 1 | 2 | 3 | 4 | 5;
+  }) => {
+    const newBubble: BubbleType = {
+      id: `bubble-${Date.now()}`,
+      type: bubbleData.type,
+      title: bubbleData.title,
+      emoji: bubbleData.emoji,
+      content: bubbleData.content,
+      color: bubbleData.color,
+      position: { x: 0, y: 0 },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      tags: [],
+      urgency: bubbleData.urgency,
+      importance: bubbleData.importance,
+      typeData: getDefaultTypeData(bubbleData.type),
+      connections: [],
+      childBubbleIds: [],
+    };
+
+    setBubbles([newBubble, ...bubbles]);
+    setCreateModalVisible(false);
+    Alert.alert('Success', `Created new ${bubbleData.type} bubble: "${bubbleData.title}"`);
+  };
+
+  const getDefaultTypeData = (type: BubbleType['type']): any => {
+    switch (type) {
+      case 'task':
+        return { isCompleted: false, priority: 'medium' as const, steps: [] };
+      case 'project':
+        return { progress: 0, milestones: [] };
+      case 'goal':
+        return { progress: 0, target: '', milestones: [] };
+      case 'journal':
+        return { entries: [] };
+      case 'library':
+        return { items: [] };
+      case 'ideas':
+        return { ideas: [] };
+      case 'document':
+        return { content: '', wordCount: 0, readingTimeMinutes: 0 };
+      case 'workout':
+        return { exercises: [], totalDuration: 0 };
+      case 'budget':
+        return { transactions: [], totalIncome: 0, totalExpenses: 0, balance: 0 };
+      case 'note':
+      default:
+        return { entries: [] };
+    }
   };
 
   const toggleViewMode = () => {
@@ -65,33 +148,30 @@ export const BubblePlaygroundScreen: React.FC = () => {
     setBubbles(newBubbles);
   };
 
-  const handleLongPress = (index: number) => {
-    setDraggingIndex(index);
+  const handleLongPress = (bubble: BubbleType) => {
     Alert.alert(
-      '🫧 Reorder Bubble',
-      `Long press to drag "${bubbles[index].title}" to reorder.\n\nTip: Tap the ↑ or ↓ buttons to move this bubble up or down in the list.`,
+      `🫧 ${bubble.emoji} ${bubble.title}`,
+      'Choose an action:',
       [
         {
-          text: 'Move Up',
-          onPress: () => {
-            if (index > 0) {
-              handleReorder(index, index - 1);
-            }
-            setDraggingIndex(null);
-          },
+          text: '✏️ Edit',
+          onPress: () => handleEdit(bubble),
         },
         {
-          text: 'Move Down',
-          onPress: () => {
-            if (index < bubbles.length - 1) {
-              handleReorder(index, index + 1);
-            }
-            setDraggingIndex(null);
-          },
+          text: '🗑️ Delete',
+          onPress: () => handleDelete(bubble),
+          style: 'destructive',
+        },
+        {
+          text: '🔗 Connect',
+          onPress: () => handleConnect(bubble),
+        },
+        {
+          text: '🔄 Transform',
+          onPress: () => handleTransform(bubble),
         },
         {
           text: 'Cancel',
-          onPress: () => setDraggingIndex(null),
           style: 'cancel',
         },
       ]
@@ -102,7 +182,7 @@ export const BubblePlaygroundScreen: React.FC = () => {
     <TouchableOpacity
       key={bubble.id}
       style={viewMode === 'grid' && styles.gridItem}
-      onLongPress={() => handleLongPress(index)}
+      onLongPress={() => handleLongPress(bubble)}
       delayLongPress={500}
     >
       <Bubble
@@ -111,7 +191,10 @@ export const BubblePlaygroundScreen: React.FC = () => {
         onExpand={handleExpand}
         onConnect={handleConnect}
         onTransform={handleTransform}
+        onDelete={handleDelete}
+        onEdit={handleEdit}
         isExpanded={expandedBubbleId === bubble.id}
+        compact={viewMode === 'grid'}
       />
     </TouchableOpacity>
   );
@@ -164,7 +247,7 @@ export const BubblePlaygroundScreen: React.FC = () => {
           Sample Bubbles ({bubbles.length})
         </Text>
         <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
-          Tap to expand • Long press to reorder
+          Tap to expand • Long press for menu
         </Text>
 
         {viewMode === 'list' ? (
@@ -172,9 +255,15 @@ export const BubblePlaygroundScreen: React.FC = () => {
             {bubbles.map((bubble, index) => renderBubble(bubble, index))}
           </View>
         ) : (
-          <View style={styles.gridView}>
-            {bubbles.map((bubble, index) => renderBubble(bubble, index))}
-          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.gridScrollContent}
+          >
+            <View style={styles.gridView}>
+              {bubbles.map((bubble, index) => renderBubble(bubble, index))}
+            </View>
+          </ScrollView>
         )}
 
         {/* Feature Info */}
@@ -196,6 +285,13 @@ export const BubblePlaygroundScreen: React.FC = () => {
           </Text>
         </View>
       </ScrollView>
+
+      {/* Create Bubble Modal */}
+      <CreateBubbleModal
+        visible={createModalVisible}
+        onClose={() => setCreateModalVisible(false)}
+        onCreateBubble={handleCreateBubbleSubmit}
+      />
     </SafeAreaView>
   );
 };
@@ -279,15 +375,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
+  gridScrollContent: {
+    paddingRight: SPACING.lg,
+  },
   gridView: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: SPACING.md,
   },
   gridItem: {
-    width: '48%',
-    minWidth: 150, // Ensure minimum size
-    maxWidth: 400, // Limit width on web so it doesn't get too wide
+    width: 120, // Small iPhone icon size
+    height: 120, // Make it square
+    minWidth: 120,
+    maxWidth: 120,
   },
   featureInfo: {
     marginTop: SPACING.xl,

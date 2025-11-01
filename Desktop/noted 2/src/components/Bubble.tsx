@@ -11,7 +11,10 @@ interface BubbleProps {
   onExpand?: (bubble: BubbleType) => void;
   onConnect?: (bubble: BubbleType) => void;
   onTransform?: (bubble: BubbleType) => void;
+  onDelete?: (bubble: BubbleType) => void;
+  onEdit?: (bubble: BubbleType) => void;
   isExpanded?: boolean;
+  compact?: boolean;
 }
 
 export const Bubble: React.FC<BubbleProps> = ({
@@ -20,7 +23,10 @@ export const Bubble: React.FC<BubbleProps> = ({
   onExpand,
   onConnect,
   onTransform,
+  onDelete,
+  onEdit,
   isExpanded = false,
+  compact = false,
 }) => {
   const { colors } = useTheme();
   const typeInfo = BUBBLE_TYPE_INFO[bubble.type];
@@ -128,6 +134,26 @@ export const Bubble: React.FC<BubbleProps> = ({
         return null;
     }
   };
+
+  // Compact mode: Show only emoji centered
+  if (compact) {
+    return (
+      <TouchableOpacity
+        style={[
+          styles.compactContainer,
+          {
+            backgroundColor: colors.surface,
+            borderColor: bubble.color,
+            borderWidth: 2,
+          },
+        ]}
+        onPress={() => onPress?.(bubble)}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.compactEmoji}>{bubble.emoji}</Text>
+      </TouchableOpacity>
+    );
+  }
 
   return (
     <TouchableOpacity
@@ -246,9 +272,9 @@ export const Bubble: React.FC<BubbleProps> = ({
         <View style={styles.actions}>
           <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: colors.accent }]}
-            onPress={() => onExpand?.(bubble)}
+            onPress={() => onEdit?.(bubble)}
           >
-            <Text style={styles.actionButtonText}>👁️ View</Text>
+            <Text style={styles.actionButtonText}>✏️ Edit</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: colors.accent }]}
@@ -261,6 +287,12 @@ export const Bubble: React.FC<BubbleProps> = ({
             onPress={() => onTransform?.(bubble)}
           >
             <Text style={styles.actionButtonText}>🔄 Transform</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: '#FF3B30' }]}
+            onPress={() => onDelete?.(bubble)}
+          >
+            <Text style={styles.actionButtonText}>🗑️ Delete</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -278,6 +310,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
+  },
+  compactContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  compactEmoji: {
+    fontSize: 48,
   },
   expandedContainer: {
     borderWidth: 3,
