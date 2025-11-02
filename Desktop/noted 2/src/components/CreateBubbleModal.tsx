@@ -203,62 +203,39 @@ export const CreateBubbleModal: React.FC<CreateBubbleModalProps> = ({
               textAlignVertical="top"
             />
 
-            {/* Urgency Selector */}
+            {/* Urgency Selector - Simple 3 dots */}
             <Text style={[styles.label, { color: colors.text }]}>Urgency</Text>
-            <View style={styles.pillGroup}>
-              {(['none', 'low', 'medium', 'high'] as const).map((level) => (
-                <TouchableOpacity
-                  key={level}
-                  style={[
-                    styles.pill,
-                    {
-                      backgroundColor: urgency === level ? '#007AFF' : colors.surfaceVariant,
-                      borderColor: urgency === level ? '#007AFF' : colors.border,
-                    },
-                  ]}
-                  onPress={() => setUrgency(level)}
-                >
-                  <Text style={[styles.pillText, { color: urgency === level ? '#FFF' : colors.text }]}>
-                    {level === 'none' && 'None'}
-                    {level === 'low' && '🟢 Low'}
-                    {level === 'medium' && '🟡 Medium'}
-                    {level === 'high' && '🔴 High'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            <View style={styles.simpleRow}>
+              <TouchableOpacity onPress={() => setUrgency('none')}>
+                <Text style={styles.urgencyDot}>⚪</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setUrgency('low')}>
+                <Text style={styles.urgencyDot}>🟢</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setUrgency('medium')}>
+                <Text style={styles.urgencyDot}>🟡</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setUrgency('high')}>
+                <Text style={styles.urgencyDot}>🔴</Text>
+              </TouchableOpacity>
+              <Text style={[styles.selectedText, { color: colors.textSecondary }]}>
+                {urgency === 'none' && 'None'}
+                {urgency === 'low' && 'Low'}
+                {urgency === 'medium' && 'Medium'}
+                {urgency === 'high' && 'High'}
+              </Text>
             </View>
 
-            {/* Importance Selector */}
+            {/* Importance Selector - Simple clickable stars */}
             <Text style={[styles.label, { color: colors.text }]}>Importance</Text>
-            <View style={styles.pillGroup}>
-              <TouchableOpacity
-                style={[
-                  styles.pill,
-                  {
-                    backgroundColor: importance === undefined ? '#007AFF' : colors.surfaceVariant,
-                    borderColor: importance === undefined ? '#007AFF' : colors.border,
-                  },
-                ]}
-                onPress={() => setImportance(undefined)}
-              >
-                <Text style={[styles.pillText, { color: importance === undefined ? '#FFF' : colors.text }]}>
-                  None
-                </Text>
+            <View style={styles.simpleRow}>
+              <TouchableOpacity onPress={() => setImportance(undefined)}>
+                <Text style={styles.importanceStar}>⚪</Text>
               </TouchableOpacity>
-              {([1, 2, 3, 4, 5] as const).map((level) => (
-                <TouchableOpacity
-                  key={level}
-                  style={[
-                    styles.pill,
-                    {
-                      backgroundColor: importance === level ? '#007AFF' : colors.surfaceVariant,
-                      borderColor: importance === level ? '#007AFF' : colors.border,
-                    },
-                  ]}
-                  onPress={() => setImportance(level)}
-                >
-                  <Text style={[styles.pillText, { color: importance === level ? '#FFF' : colors.text }]}>
-                    {'⭐'.repeat(level)}
+              {[1, 2, 3, 4, 5].map((level) => (
+                <TouchableOpacity key={level} onPress={() => setImportance(level as 1 | 2 | 3 | 4 | 5)}>
+                  <Text style={styles.importanceStar}>
+                    {importance && importance >= level ? '⭐' : '☆'}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -405,20 +382,21 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.body,
     color: '#FFFFFF',
   },
-  pillGroup: {
+  simpleRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
     gap: SPACING.sm,
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.md,
   },
-  pill: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: 20,
-    borderWidth: 1,
+  urgencyDot: {
+    fontSize: 32,
   },
-  pillText: {
+  importanceStar: {
+    fontSize: 32,
+  },
+  selectedText: {
     ...FONTS.medium,
-    fontSize: FONT_SIZES.small,
+    fontSize: FONT_SIZES.body,
+    marginLeft: SPACING.sm,
   },
 });
