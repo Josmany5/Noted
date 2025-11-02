@@ -1119,6 +1119,12 @@ export const HomeScreen = ({ navigation }: any) => {
         <View style={styles.headerButtons}>
           <TouchableOpacity
             style={[styles.headerButton, { backgroundColor: colors.accent }]}
+            onPress={() => navigation.navigate('Dashboard')}
+          >
+            <Text style={styles.headerButtonText}>📊</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.headerButton, { backgroundColor: colors.accent }]}
             onPress={() => navigation.navigate('BubblePlayground')}
           >
             <Text style={styles.headerButtonText}>🫧</Text>

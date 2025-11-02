@@ -13,6 +13,13 @@ import { AllFoldersScreen } from './src/screens/AllFoldersScreen';
 import { AllNotesScreen } from './src/screens/AllNotesScreen';
 import { FolderDetailScreen } from './src/screens/FolderDetailScreen';
 import { BubblePlaygroundScreen } from './src/screens/BubblePlaygroundScreen';
+import { DashboardScreen } from './src/screens/DashboardScreen';
+import { CreateBubbleScreen } from './src/screens/CreateBubbleScreen';
+import { CalendarScreen } from './src/screens/CalendarScreen';
+import { PlannerScreen } from './src/screens/PlannerScreen';
+import { PendingScreen } from './src/screens/PendingScreen';
+import { ToDoTodayScreen } from './src/screens/ToDoTodayScreen';
+import { AnalyticsScreen } from './src/screens/AnalyticsScreen';
 import { getDatabase } from './src/services';
 import { useStore } from './src/store';
 
@@ -89,12 +96,19 @@ export default function App() {
         }}
       >
         <Stack.Screen name="Home" component={HomeScreen} />
+        <Stack.Screen name="Dashboard" component={DashboardScreen} />
         <Stack.Screen name="NoteDetail" component={NoteDetailScreen} />
         <Stack.Screen name="Systems" component={SystemsScreen} />
         <Stack.Screen name="AllFolders" component={AllFoldersScreen} />
         <Stack.Screen name="AllNotes" component={AllNotesScreen} />
         <Stack.Screen name="FolderDetail" component={FolderDetailScreen} />
         <Stack.Screen name="BubblePlayground" component={BubblePlaygroundScreen} />
+        <Stack.Screen name="CreateBubble" component={CreateBubbleScreen} />
+        <Stack.Screen name="Calendar" component={CalendarScreen} />
+        <Stack.Screen name="Planner" component={PlannerScreen} />
+        <Stack.Screen name="Pending" component={PendingScreen} />
+        <Stack.Screen name="ToDoToday" component={ToDoTodayScreen} />
+        <Stack.Screen name="Analytics" component={AnalyticsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

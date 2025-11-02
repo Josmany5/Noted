@@ -328,17 +328,20 @@ export interface TimelineBlock {
 // ============================================
 
 export interface BubbleSchedule {
-  id: string;
-  bubbleId: string;
-  type: 'once' | 'daily' | 'weekly' | 'monthly' | 'custom';
+  id?: string;
+  bubbleId?: string;
+  startDate?: Date; // When the bubble is scheduled
+  recurrence?: 'none' | 'daily' | 'weekly' | 'monthly';
+  notifications?: boolean; // Enable/disable notifications
+  type?: 'once' | 'daily' | 'weekly' | 'monthly' | 'custom';
   date?: Date; // For one-time
   time?: string; // HH:MM format
   daysOfWeek?: number[]; // 0-6 (Sunday-Saturday)
   dayOfMonth?: number; // 1-31
   customPattern?: string; // Cron-like pattern
   reminderMinutesBefore?: number;
-  createdAt: Date;
-  isActive: boolean;
+  createdAt?: Date;
+  isActive?: boolean;
 }
 
 // ============================================

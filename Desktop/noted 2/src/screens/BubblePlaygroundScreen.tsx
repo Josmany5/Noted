@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Bubble } from '../components/Bubble';
 import { CreateBubbleModal } from '../components/CreateBubbleModal';
+import { BubbleContextMenu } from '../components/BubbleContextMenu';
 import { SAMPLE_BUBBLES } from '../data/sampleBubbles';
 import { Bubble as BubbleType } from '../types/bubble';
 import { FONTS, FONT_SIZES, SPACING } from '../theme';
@@ -19,6 +20,8 @@ export const BubblePlaygroundScreen: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [contextMenuVisible, setContextMenuVisible] = useState(false);
+  const [selectedBubble, setSelectedBubble] = useState<BubbleType | null>(null);
 
   const handleBubblePress = (bubble: BubbleType) => {
     setExpandedBubbleId(expandedBubbleId === bubble.id ? null : bubble.id);
@@ -68,15 +71,39 @@ export const BubblePlaygroundScreen: React.FC = () => {
   };
 
   const handleEdit = (bubble: BubbleType) => {
-    Alert.alert(
-      '✏️ Edit Bubble',
-      `Editing "${bubble.title}" - This will open the edit modal (coming next!)`,
-      [{ text: 'OK' }]
-    );
+    navigation.navigate('CreateBubble' as never, {
+      bubble: bubble,
+      onSave: (updatedBubble: Partial<BubbleType>) => {
+        setBubbles(bubbles.map(b => b.id === bubble.id ? { ...b, ...updatedBubble } : b));
+      }
+    } as never);
   };
 
   const handleCreateBubble = () => {
-    setCreateModalVisible(true);
+    navigation.navigate('CreateBubble' as never, {
+      onSave: (bubbleData: Partial<BubbleType>) => {
+        const newBubble: BubbleType = {
+          id: `bubble-${Date.now()}`,
+          type: bubbleData.type!,
+          title: bubbleData.title!,
+          emoji: bubbleData.emoji!,
+          content: bubbleData.content || '',
+          color: bubbleData.color!,
+          position: { x: 0, y: 0 },
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          tags: [],
+          urgency: bubbleData.urgency,
+          importance: bubbleData.importance,
+          schedule: bubbleData.schedule,
+          typeData: getDefaultTypeData(bubbleData.type!),
+          connections: [],
+          childBubbleIds: [],
+        };
+        setBubbles([newBubble, ...bubbles]);
+        Alert.alert('Success', `Created new ${bubbleData.type} bubble: "${bubbleData.title}"`);
+      }
+    } as never);
   };
 
   const handleCreateBubbleSubmit = (bubbleData: {
@@ -149,42 +176,13 @@ export const BubblePlaygroundScreen: React.FC = () => {
   };
 
   const handleLongPress = (bubble: BubbleType) => {
-    Alert.alert(
-      `🫧 ${bubble.emoji} ${bubble.title}`,
-      'Choose an action:',
-      [
-        {
-          text: '✏️ Edit',
-          onPress: () => handleEdit(bubble),
-        },
-        {
-          text: '🗑️ Delete',
-          onPress: () => handleDelete(bubble),
-          style: 'destructive',
-        },
-        {
-          text: '🔗 Connect',
-          onPress: () => handleConnect(bubble),
-        },
-        {
-          text: '🔄 Transform',
-          onPress: () => handleTransform(bubble),
-        },
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-      ]
-    );
+    console.log('Long press triggered for bubble:', bubble.title);
+    setSelectedBubble(bubble);
+    setContextMenuVisible(true);
   };
 
   const renderBubble = (bubble: BubbleType, index: number) => (
-    <TouchableOpacity
-      key={bubble.id}
-      style={viewMode === 'grid' && styles.gridItem}
-      onLongPress={() => handleLongPress(bubble)}
-      delayLongPress={500}
-    >
+    <View key={bubble.id} style={viewMode === 'grid' && styles.gridItem}>
       <Bubble
         bubble={bubble}
         onPress={handleBubblePress}
@@ -193,10 +191,11 @@ export const BubblePlaygroundScreen: React.FC = () => {
         onTransform={handleTransform}
         onDelete={handleDelete}
         onEdit={handleEdit}
+        onLongPress={handleLongPress}
         isExpanded={expandedBubbleId === bubble.id}
         compact={viewMode === 'grid'}
       />
-    </TouchableOpacity>
+    </View>
   );
 
   return (
@@ -291,6 +290,17 @@ export const BubblePlaygroundScreen: React.FC = () => {
         visible={createModalVisible}
         onClose={() => setCreateModalVisible(false)}
         onCreateBubble={handleCreateBubbleSubmit}
+      />
+
+      {/* Context Menu */}
+      <BubbleContextMenu
+        visible={contextMenuVisible}
+        bubble={selectedBubble}
+        onClose={() => setContextMenuVisible(false)}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        onConnect={handleConnect}
+        onTransform={handleTransform}
       />
     </SafeAreaView>
   );

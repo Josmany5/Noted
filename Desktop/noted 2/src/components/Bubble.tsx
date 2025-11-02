@@ -13,6 +13,7 @@ interface BubbleProps {
   onTransform?: (bubble: BubbleType) => void;
   onDelete?: (bubble: BubbleType) => void;
   onEdit?: (bubble: BubbleType) => void;
+  onLongPress?: (bubble: BubbleType) => void;
   isExpanded?: boolean;
   compact?: boolean;
 }
@@ -25,6 +26,7 @@ export const Bubble: React.FC<BubbleProps> = ({
   onTransform,
   onDelete,
   onEdit,
+  onLongPress,
   isExpanded = false,
   compact = false,
 }) => {
@@ -148,6 +150,8 @@ export const Bubble: React.FC<BubbleProps> = ({
           },
         ]}
         onPress={() => onPress?.(bubble)}
+        onLongPress={() => onLongPress?.(bubble)}
+        delayLongPress={500}
         activeOpacity={0.7}
       >
         <Text style={styles.compactEmoji}>{bubble.emoji}</Text>
@@ -167,6 +171,8 @@ export const Bubble: React.FC<BubbleProps> = ({
         isExpanded && styles.expandedContainer,
       ]}
       onPress={() => onPress?.(bubble)}
+      onLongPress={() => onLongPress?.(bubble)}
+      delayLongPress={500}
       activeOpacity={0.7}
     >
       {/* Header */}
