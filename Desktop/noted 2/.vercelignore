@@ -1,0 +1,11 @@
+node_modules
+.expo
+.expo-shared
+.git
+.DS_Store
+*.log
+.vscode
+.idea
+.claude
+ios
+android

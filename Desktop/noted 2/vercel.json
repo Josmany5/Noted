@@ -1,13 +1,15 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "expo export --platform web",
   "outputDirectory": "dist",
-  "devCommand": "npm run web",
   "installCommand": "npm install",
-  "framework": "expo",
-  "rewrites": [
+  "routes": [
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "src": "/static/(.*)",
+      "dest": "/static/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }
